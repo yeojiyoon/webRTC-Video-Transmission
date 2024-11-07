@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebRTC 파일 전송</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        video {
+            width: 100%;
+            max-width: 600px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>WebRTC 파일 전송</h1>
+    
+    <input type="file" id="fileInput" />
+    <button id="sendButton">파일 전송</button>
+    <button id="receiveButton">수신 시작</button>
+    
+    <p id="status"></p>
+    <video id="receivedVideo" controls></video>
+    
+    <script src="app.js"></script>
+    <script>
+        document.getElementById('sendButton').onclick = startSender;
+        document.getElementById('receiveButton').onclick = startReceiver;
+    </script>
+</body>
+</html>
