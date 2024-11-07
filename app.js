@@ -4,60 +4,75 @@ let fileInput = document.getElementById("fileInput");
 let receivedVideo = document.getElementById("receivedVideo");
 let status = document.getElementById("status");
 
-const CHUNK_SIZE = 65536; // 조각 크기
+const CHUNK_SIZE = 8192; // 조각 크기
 let startTime, endTime;
 const signalingSocket = new WebSocket('ws://localhost:8080');
 
 signalingSocket.onmessage = async (message) => {
-    console.log("Received message:", message.data); // 수신된 메시지 로그
+    console.log("Received message:", message.data);
 
-    // 문자열로 된 데이터인지 확인 후 JSON 파싱
-    if (typeof message.data === "string") 
-    {
-        try 
-        {
-            const data = JSON.parse(message.data);
-            console.log("Parsed data:", data); // 파싱된 데이터 로그
-
-            if (data.offer) 
-            {
-                await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
-                const answer = await peerConnection.createAnswer();
-                await peerConnection.setLocalDescription(answer);
-                signalingSocket.send(JSON.stringify({ answer: answer }));
-            }
-            else if (data.answer) 
-            {
-                await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
-            }
-            else if (data.iceCandidate) 
-            {
-                peerConnection.addIceCandidate(new RTCIceCandidate(data.iceCandidate));
-            }
-        }
-        catch (error)
-        {
-            console.error("Error parsing message:", error); // 오류 로그
-        }
+    if (typeof message.data === "string") {
+        // 문자열로 수신된 경우
+        handleSignalingData(message.data);
+    } else if (message.data instanceof Blob) {
+        // Blob 형태로 수신된 경우 문자열로 변환
+        const text = await message.data.text();
+        handleSignalingData(text);
+    } else {
+        console.log("signaling failed");
     }
 };
+
+async function handleSignalingData(data) {
+    try {
+        const parsedData = JSON.parse(data);
+        console.log("Parsed data:", parsedData);
+
+        if (parsedData.offer) {
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(parsedData.offer));
+            const answer = await peerConnection.createAnswer();
+            await peerConnection.setLocalDescription(answer);
+            signalingSocket.send(JSON.stringify({ answer: answer }));
+        } else if (parsedData.answer) {
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(parsedData.answer));
+        } else if (parsedData.iceCandidate) {
+            peerConnection.addIceCandidate(new RTCIceCandidate(parsedData.iceCandidate));
+        }
+    } catch (error) {
+        console.error("Error parsing message:", error);
+    }
+}
+
 
 // 파일 송신 시작
 function startSender() {
     setupConnection();
     console.log("Sender: Setting up connection.");
-    dataChannel.onopen = () => { //수정 필요
-        console.log("dataChannel open");
-        status.innerText = "전송 시작...";
+    dataChannel = peerConnection.createDataChannel("fileTransfer");
+    console.log(dataChannel);
+
+    dataChannel.onopen = () => {
+        console.log("Data channel is open and ready to be used.");
+        status.innerText = "Data channel is open.";
         if (fileInput.files.length > 0) 
-        {
-            console.log("fileInput.files.length>0");
-            sendFile(fileInput.files[0]);
-        }
-        else 
-        {
-            console.log("file is empty");
-        }
+            {
+                console.log("fileInput.files.length>0");
+                sendFile(fileInput.files[0]);
+            }
+            else 
+            {
+                console.log("file is empty");
+            }
+    };
+
+    dataChannel.onclose = () => {
+        console.log("Data channel is closed.");
+        status.innerText = "Data channel is closed.";
+    };
+
+    dataChannel.onerror = (error) => {
+        console.error("Data channel error:", error);
+        status.innerText = "Data channel error.";
     };
 }
 
@@ -90,6 +105,15 @@ function setupConnection() {
         console.log("ICE connection state:", peerConnection.iceConnectionState);
         if (peerConnection.iceConnectionState === "connected") {
             console.log("Peer connected!");
+        }
+    };
+
+    peerConnection.onicecandidate = (event) => {
+        if (event.candidate) {
+            console.log("ICE candidate:", event.candidate);
+            signalingSocket.send(JSON.stringify({ iceCandidate: event.candidate }));
+        } else {
+            console.log("All ICE candidates have been sent.");
         }
     };
 
